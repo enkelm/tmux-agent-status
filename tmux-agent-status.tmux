@@ -94,10 +94,27 @@ fi
 # Set up tmux status line integration
 tmux set-option -g status-interval 1
 
-# Check if our status is already in the status-right
-current_status_right=$(tmux show-option -gqv status-right)
-if ! echo "$current_status_right" | grep -q "status-line.sh"; then
-    tmux set-option -ag status-right " #($CURRENT_DIR/scripts/status-line.sh)"
+# Style: "legacy" (default — raw `#(status-line.sh)` appended to status-right)
+# or "catppuccin" (status-line.sh writes @agents_* options; user is expected
+# to source catppuccin/agents.conf and reference #{E:@catppuccin_status_agents}
+# in their status-right manually).
+status_style=$(tmux show-option -gqv "@agent-status-style")
+[ -z "$status_style" ] && status_style="legacy"
+
+if [ "$status_style" = "legacy" ]; then
+    # Check if our status is already in the status-right
+    current_status_right=$(tmux show-option -gqv status-right)
+    if ! echo "$current_status_right" | grep -q "status-line.sh"; then
+        tmux set-option -ag status-right " #($CURRENT_DIR/scripts/status-line.sh)"
+    fi
+else
+    # Catppuccin mode — script still polls (for chimes and @agents_* writes),
+    # but doesn't live in status-right. Trigger it on each interval via a
+    # discarded #() so the side effects keep firing.
+    current_status_right=$(tmux show-option -gqv status-right)
+    if ! echo "$current_status_right" | grep -q "status-line.sh"; then
+        tmux set-option -ag status-right "#(${CURRENT_DIR}/scripts/status-line.sh >/dev/null)"
+    fi
 fi
 
 # Set up daemon monitor to ensure smart-monitor is always running

@@ -80,7 +80,8 @@ publish_status_summary() {
         "$SUMMARY_WORKING" \
         "$SUMMARY_WAITING" \
         "$SUMMARY_DONE" \
-        "$SUMMARY_TOTAL"
+        "$SUMMARY_TOTAL" \
+        "${SUMMARY_ASK:-0}"
 
     if (( ! RUN_ONCE )) && [ -n "$prev_done" ] && [ "$SUMMARY_DONE" -gt "$prev_done" ]; then
         "$SCRIPT_DIR/play-sound.sh" &

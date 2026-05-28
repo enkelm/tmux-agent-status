@@ -50,6 +50,7 @@ write_status_summary_cache() {
     local waiting="$2"
     local done="$3"
     local total_agents="$4"
+    local ask="${5:-0}"
     local summary
 
     summary="$(render_status_summary "$working" "$waiting" "$done" "$total_agents")"
@@ -57,4 +58,43 @@ write_status_summary_cache() {
     mv -f "${STATUS_LINE_COUNTS_FILE}.tmp" "$STATUS_LINE_COUNTS_FILE"
     printf '%s\n' "$summary" > "${STATUS_LINE_CACHE_FILE}.tmp"
     mv -f "${STATUS_LINE_CACHE_FILE}.tmp" "$STATUS_LINE_CACHE_FILE"
+
+    write_agents_tmux_options "$working" "$waiting" "$done" "$total_agents" "$ask"
+}
+
+# Publish aggregate state to tmux user options so the catppuccin
+# `@catppuccin_status_agents` pill can render without forking.
+#
+# Precedence: ask > done > wait > working > idle.
+# Color is resolved from the active catppuccin flavor via @thm_* options,
+# so theme swaps just work — re-reading them on every tick costs nothing.
+write_agents_tmux_options() {
+    local working="$1"
+    local waiting="$2"
+    local done_count="$3"
+    local total="$4"
+    local ask="${5:-0}"
+
+    local state color_var color
+    if (( ask > 0 )); then
+        state="ask"; color_var="@thm_maroon"
+    elif (( done_count > 0 )); then
+        # `done` here already includes ask via collect.sh bucketing; we land
+        # in this branch only when there are no ask sessions.
+        state="done"; color_var="@thm_peach"
+    elif (( waiting > 0 )); then
+        state="wait"; color_var="@thm_yellow"
+    elif (( working > 0 )); then
+        state="working"; color_var="@thm_mauve"
+    else
+        state="idle"; color_var="@thm_mauve"
+    fi
+
+    color=$(tmux show-option -gqv "$color_var" 2>/dev/null)
+    [ -z "$color" ] && color="default"
+
+    tmux set-option -gq "@agents_total" "$total" 2>/dev/null
+    tmux set-option -gq "@agents_state" "$state" 2>/dev/null
+    tmux set-option -gq "@agents_counts" "${working}·${waiting}·${done_count}" 2>/dev/null
+    tmux set-option -gq "@agents_icon_bg" "$color" 2>/dev/null
 }

@@ -96,6 +96,7 @@ collect_data() {
     SUMMARY_WORKING=0
     SUMMARY_WAITING=0
     SUMMARY_DONE=0
+    SUMMARY_ASK=0
     SUMMARY_TOTAL=0
     SUMMARY_HAS_WORKING=0
 
@@ -293,6 +294,9 @@ collect_data() {
             done|ask)
                 ((SUMMARY_DONE++))
                 ((SUMMARY_TOTAL++))
+                # Track ask separately so the catppuccin pill can pick
+                # maroon for "blocked on you" without renaming SUMMARY_DONE.
+                [[ "${sess_state[$sname]}" == "ask" ]] && ((SUMMARY_ASK++))
                 ;;
             *)
                 ;;

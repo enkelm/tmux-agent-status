@@ -114,11 +114,14 @@ check_agent_processes() {
 expire_wait_timers >/dev/null
 check_agent_processes
 
-# Count agent sessions by status
+# Count agent sessions by status.
+# Note: ask sessions are bucketed into `done` (matches collect.sh) AND
+# tracked separately in `ask` so the catppuccin pill can pick maroon.
 count_agent_status() {
     local working=0
     local waiting=0
     local done=0
+    local ask=0
     local total_agents=0
 
     # Check all tmux sessions including SSH remote status
@@ -142,6 +145,7 @@ count_agent_status() {
                     "working") ((working++)); ((total_agents++)) ;;
                     "done") ((done++)); ((total_agents++)) ;;
                     "wait") ((waiting++)); ((total_agents++)) ;;
+                    "ask") ((done++)); ((ask++)); ((total_agents++)) ;;
                 esac
             fi
         elif [ -f "$remote_status_file" ] && ! is_ssh_session "$session"; then
@@ -156,6 +160,7 @@ count_agent_status() {
                         "working") ((working++)); ((total_agents++)) ;;
                         "done") ((done++)); ((total_agents++)) ;;
                         "wait") ((waiting++)); ((total_agents++)) ;;
+                        "ask") ((done++)); ((ask++)); ((total_agents++)) ;;
                     esac
                 fi
             fi
@@ -168,16 +173,17 @@ count_agent_status() {
                     "working") ((working++)); ((total_agents++)) ;;
                     "done") ((done++)); ((total_agents++)) ;;
                     "wait") ((waiting++)); ((total_agents++)) ;;
+                    "ask") ((done++)); ((ask++)); ((total_agents++)) ;;
                 esac
             fi
         fi
     done < <(tmux list-sessions -F "#{session_name}" 2>/dev/null)
 
-    echo "$working:$waiting:$done:$total_agents"
+    echo "$working:$waiting:$done:$ask:$total_agents"
 }
 
 # Get current status
-IFS=':' read -r working waiting done total_agents <<< "$(count_agent_status)"
+IFS=':' read -r working waiting done ask total_agents <<< "$(count_agent_status)"
 
 # Load previous status. Older versions stored only the working count; skip
 # notification diffing until we've written the new multi-count format once.
@@ -196,5 +202,9 @@ echo "$working:$waiting:$done:$total_agents" > "$LAST_STATUS_FILE"
 if [ -n "$prev_done" ] && [ "$done" -gt "$prev_done" ]; then
     "$SCRIPT_DIR/play-sound.sh" &
 fi
+
+# Publish aggregate state to tmux options for the catppuccin pill.
+# Cheap no-op when the legacy style is active (the options just sit unused).
+write_agents_tmux_options "$working" "$waiting" "$done" "$total_agents" "$ask"
 
 render_status_summary "$working" "$waiting" "$done" "$total_agents"
