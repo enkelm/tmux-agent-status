@@ -288,27 +288,33 @@ collect_data() {
     done
 
     # ── 5a. Shared status-line summary counts ────────────────────
+    # Count per agent pane when a session has detected agents; otherwise
+    # fall back to session-level state. This lets multi-agent sessions
+    # (e.g. claude + codex side-by-side) contribute each agent to the pill.
     for sname in "${!sess_state[@]}"; do
-        case "${sess_state[$sname]}" in
-            working)
-                ((SUMMARY_WORKING++))
-                ((SUMMARY_TOTAL++))
-                SUMMARY_HAS_WORKING=1
-                ;;
-            wait)
-                ((SUMMARY_WAITING++))
-                ((SUMMARY_TOTAL++))
-                ;;
-            done|ask)
-                ((SUMMARY_DONE++))
-                ((SUMMARY_TOTAL++))
-                # Track ask separately so the catppuccin pill can pick
-                # maroon for "blocked on you" without renaming SUMMARY_DONE.
-                [[ "${sess_state[$sname]}" == "ask" ]] && ((SUMMARY_ASK++))
-                ;;
-            *)
-                ;;
-        esac
+        local _agents="${sess_agents[$sname]:-}"
+        if [ -n "$_agents" ]; then
+            local _seen=""
+            for ap in $_agents; do
+                local _ppid="${ap%%:*}"
+                [[ " $_seen " == *" $_ppid "* ]] && continue
+                _seen+="$_ppid "
+                local _rest="${ap#*:}"; local _ps="${_rest#*:}"
+                case "$_ps" in
+                    working) ((SUMMARY_WORKING++)); ((SUMMARY_TOTAL++)); SUMMARY_HAS_WORKING=1 ;;
+                    wait)    ((SUMMARY_WAITING++)); ((SUMMARY_TOTAL++)) ;;
+                    done)    ((SUMMARY_DONE++));    ((SUMMARY_TOTAL++)) ;;
+                    ask)     ((SUMMARY_DONE++));    ((SUMMARY_ASK++)); ((SUMMARY_TOTAL++)) ;;
+                esac
+            done
+        else
+            case "${sess_state[$sname]}" in
+                working) ((SUMMARY_WORKING++)); ((SUMMARY_TOTAL++)); SUMMARY_HAS_WORKING=1 ;;
+                wait)    ((SUMMARY_WAITING++)); ((SUMMARY_TOTAL++)) ;;
+                done)    ((SUMMARY_DONE++));    ((SUMMARY_TOTAL++)) ;;
+                ask)     ((SUMMARY_DONE++));    ((SUMMARY_ASK++)); ((SUMMARY_TOTAL++)) ;;
+            esac
+        fi
     done
 
     # ── 5b. Compute per-session pane counts ─────────────────────
