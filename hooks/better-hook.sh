@@ -76,6 +76,13 @@ set_status() {
                         session_status="wait"
                     fi
                     ;;
+                ask)
+                    # ask outranks done but yields to working/wait.
+                    case "$session_status" in
+                        working|wait) ;;
+                        *) session_status="ask" ;;
+                    esac
+                    ;;
             esac
         done
     fi
@@ -175,12 +182,31 @@ case "$HOOK_TYPE" in
         mark_refresh
         ;;
     Notification)
-        # Claude is waiting for user input.
-        set_status "$TMUX_SESSION" "done"
-        mark_refresh
+        # Notification fires for two distinct cases, distinguished by .message:
+        #   1. A permission prompt or question Claude is blocked on
+        #      ("Claude needs your permission to use ...") -> "ask".
+        #   2. The prompt sat idle for 60s with nothing pending
+        #      ("Claude is waiting for your input") -> not a question, so keep
+        #      it "done". Mapping this to "ask" left sessions stuck on "ask".
+        notif_msg=""
+        if command -v jq >/dev/null 2>&1; then
+            notif_msg="$(printf '%s' "$HOOK_JSON" | jq -r '.message // ""' 2>/dev/null)"
+        else
+            notif_msg="$HOOK_JSON"
+        fi
 
-        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-        "$SCRIPT_DIR/../scripts/play-sound.sh" 2>/dev/null &
+        case "$notif_msg" in
+            *"waiting for your input"*)
+                # Idle timeout — nothing actually pending.
+                set_status "$TMUX_SESSION" "done"
+                ;;
+            *)
+                set_status "$TMUX_SESSION" "ask"
+                SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+                "$SCRIPT_DIR/../scripts/play-sound.sh" ask 2>/dev/null &
+                ;;
+        esac
+        mark_refresh
         ;;
 esac
 

@@ -77,6 +77,13 @@ set_status() {
                         session_status="wait"
                     fi
                     ;;
+                ask)
+                    # ask outranks done but yields to working/wait.
+                    case "$session_status" in
+                        working|wait) ;;
+                        *) session_status="ask" ;;
+                    esac
+                    ;;
             esac
         done
     fi
