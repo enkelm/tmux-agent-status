@@ -213,7 +213,8 @@ collect_data() {
         KNOWN_AGENTS["${owner}:${pid_id}"]="$agent_name"
     done
 
-    # Find agent processes — pgrep globally, walk UP to find owning pane.
+    # Find agent processes — scan ps once for command names (pgrep -a is
+    # unreliable across BSD/macOS), walk UP to find owning pane.
     local agent_lines
     agent_lines=$(pgrep -a "claude|codex|devin" 2>/dev/null || true)
     if [[ -n "$agent_lines" ]]; then
@@ -257,7 +258,14 @@ collect_data() {
                 pane_status="wait"
             fi
         fi
-        [ -z "$pane_status" ] && pane_status="${sess_state[$owner]:-done}"
+        if [ -z "$pane_status" ]; then
+            local _ss="${sess_state[$owner]:-}"
+            if [ -z "$_ss" ] || [ "$_ss" = "noagent" ]; then
+                pane_status="done"
+            else
+                pane_status="$_ss"
+            fi
+        fi
         sess_agents[$owner]+="${pid_id}:${agent_name}:${pane_status} "
     done
 
