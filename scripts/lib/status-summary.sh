@@ -3,6 +3,10 @@
 [[ -n "${_STATUS_SUMMARY_LOADED:-}" ]] && return 0
 _STATUS_SUMMARY_LOADED=1
 
+# nf-fa-question (U+F128). Defined via $'' so the PUA byte sequence survives
+# any tool that strips raw glyphs from this file.
+ASK_ICON=$''
+
 format_working_segment() {
     local count="$1"
     if [ "$count" -eq 1 ]; then
@@ -79,8 +83,6 @@ write_agents_tmux_options() {
     if (( ask > 0 )); then
         state="ask"; color_var="@thm_maroon"
     elif (( done_count > 0 )); then
-        # `done` here already includes ask via collect.sh bucketing; we land
-        # in this branch only when there are no ask sessions.
         state="done"; color_var="@thm_peach"
     elif (( waiting > 0 )); then
         state="wait"; color_var="@thm_yellow"
@@ -93,8 +95,15 @@ write_agents_tmux_options() {
     color=$(tmux show-option -gqv "$color_var" 2>/dev/null)
     [ -z "$color" ] && color="default"
 
+    # Glyph-prefixed counts, zeros hidden. Single space between segments.
+    local counts="" sep=""
+    if (( working > 0 ))    ; then counts+="${sep}⚡${working}";    sep=" "; fi
+    if (( waiting > 0 ))    ; then counts+="${sep}⏸${waiting}";    sep=" "; fi
+    if (( done_count > 0 )) ; then counts+="${sep}✓${done_count}"; sep=" "; fi
+    if (( ask > 0 ))        ; then counts+="${sep}${ASK_ICON}${ask}";       sep=" "; fi
+
     tmux set-option -gq "@agents_total" "$total" 2>/dev/null
     tmux set-option -gq "@agents_state" "$state" 2>/dev/null
-    tmux set-option -gq "@agents_counts" "${working}·${waiting}·${done_count}" 2>/dev/null
+    tmux set-option -gq "@agents_counts" "$counts" 2>/dev/null
     tmux set-option -gq "@agents_icon_bg" "$color" 2>/dev/null
 }

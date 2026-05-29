@@ -174,6 +174,8 @@ BYEL=$'\033[1;33m'
 BGRN=$'\033[1;32m'
 BMAG=$'\033[1;35m'
 BCYN=$'\033[1;36m'
+BRED=$'\033[1;31m'
+ASK_ICON=$''    # nf-fa-question
 # Selection highlight: subtle background
 SEL_BG=$'\033[48;5;236m'   # dark gray bg
 CUR_BG=$'\033[48;5;235m'   # slightly darker for current session accent
@@ -278,7 +280,7 @@ render() {
     fi
 
     # Count by state for the header (per-pane when multi-agent)
-    local nw=0 nd=0 nwt=0
+    local nw=0 nd=0 nwt=0 nask=0
     for e in "${ENTRIES[@]}"; do
         [[ "$e" != S\|* && "$e" != W\|* ]] && continue
         local rest="${e#?|}"
@@ -286,11 +288,12 @@ render() {
         local st="${rest%%|*}"
         local counts="${PANE_COUNTS[$sname]:-}"
         if [[ -n "$counts" ]]; then
-            IFS=: read -r _pw _pd _pwt <<< "$counts"
-            ((nw += _pw)); ((nd += _pd)); ((nwt += _pwt))
+            IFS=: read -r _pw _pd _pwt _pa <<< "$counts"
+            _pa="${_pa:-0}"
+            ((nw += _pw)); ((nd += _pd)); ((nwt += _pwt)); ((nask += _pa))
         else
             case "$st" in
-                working) ((nw++)) ;; done) ((nd++)) ;; wait) ((nwt++)) ;;
+                working) ((nw++)) ;; done) ((nd++)) ;; wait) ((nwt++)) ;; ask) ((nask++)) ;;
             esac
         fi
     done
@@ -314,10 +317,11 @@ render() {
         buf+=" ${BOLD}/${RST}${SEARCH_QUERY}${DIM}▏${RST}\033[K\n"
     else
         buf+=" "
-        (( nw > 0 ))  && buf+="${BYEL}${SPINNER_FRAMES[$SPINNER_TICK]}${nw}${RST} "
-        (( nd > 0 ))  && buf+="${BGRN}✓${nd}${RST} "
-        (( nwt > 0 )) && buf+="${BCYN}⏸${nwt}${RST} "
-        (( nw + nd + nwt == 0 )) && buf+="${DIM}no agents${RST}"
+        (( nw > 0 ))   && buf+="${BYEL}${SPINNER_FRAMES[$SPINNER_TICK]}${nw}${RST} "
+        (( nd > 0 ))   && buf+="${BGRN}✓${nd}${RST} "
+        (( nwt > 0 ))  && buf+="${BCYN}⏸${nwt}${RST} "
+        (( nask > 0 )) && buf+="${BRED}${ASK_ICON}${nask}${RST} "
+        (( nw + nd + nwt + nask == 0 )) && buf+="${DIM}no agents${RST}"
         buf+="\033[K\n"
         (( nw > 0 )) && _queue_spinner_target 1 2 "none" "header"
     fi
@@ -475,6 +479,7 @@ render() {
                 working) _ic="$YEL"; _icon="${SPINNER_FRAMES[$SPINNER_TICK]}" ;;
                 done)    _ic="$GRN"; _icon="✓" ;;
                 wait)    _ic="$CYN"; _icon="⏸" ;;
+                ask)     _ic="$BRED"; _icon="$ASK_ICON" ;;
                 parked)  _ic="$GRY"; _icon="P" ;;
                 *)       _ic="$GRY"; _icon="·" ;;
             esac
@@ -482,7 +487,8 @@ render() {
 
         # Build compact multi-status string from pane counts "w:d:wt"
         _render_counts() {
-            IFS=: read -r _cw _cd _cwt <<< "$1"
+            IFS=: read -r _cw _cd _cwt _ca <<< "$1"
+            _ca="${_ca:-0}"
             _count_str="" ; _count_vlen=0
             if (( _cw > 0 )); then
                 _count_str+="${YEL}${SPINNER_FRAMES[$SPINNER_TICK]}${_cw}${RST}"
@@ -497,6 +503,11 @@ render() {
                 (( _count_vlen > 0 )) && { _count_str+=" "; ((_count_vlen++)); }
                 _count_str+="${CYN}⏸${_cwt}${RST}"
                 ((_count_vlen += ${#_cwt} + 1))
+            fi
+            if (( _ca > 0 )); then
+                (( _count_vlen > 0 )) && { _count_str+=" "; ((_count_vlen++)); }
+                _count_str+="${BRED}${ASK_ICON}${_ca}${RST}"
+                ((_count_vlen += ${#_ca} + 1))
             fi
         }
 
@@ -518,7 +529,7 @@ render() {
             if [[ -n "$counts" ]]; then
                 _render_counts "$counts"
                 icon_str="$_count_str"; icon_vlen=$_count_vlen
-                IFS=: read -r _cw _cd _cwt <<< "$counts"
+                IFS=: read -r _cw _cd _cwt _ca <<< "$counts"
                 (( _cw > 0 )) && has_working_spinner=1
             else
                 local _icon _ic; _set_icon_color "$state"
@@ -581,7 +592,7 @@ render() {
             if [[ -n "$counts" ]]; then
                 _render_counts "$counts"
                 icon_str="$_count_str"; icon_vlen=$_count_vlen
-                IFS=: read -r _cw _cd _cwt <<< "$counts"
+                IFS=: read -r _cw _cd _cwt _ca <<< "$counts"
                 (( _cw > 0 )) && has_working_spinner=1
             else
                 local _icon _ic; _set_icon_color "$state"

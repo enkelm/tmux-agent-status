@@ -114,9 +114,8 @@ check_agent_processes() {
 expire_wait_timers >/dev/null
 check_agent_processes
 
-# Count agent sessions by status.
-# Note: ask sessions are bucketed into `done` (matches collect.sh) AND
-# tracked separately in `ask` so the catppuccin pill can pick maroon.
+# Count agent sessions by status. `ask` is its own counter; the pill shows
+# it as a separate maroon segment alongside done/working/waiting.
 count_agent_status() {
     local working=0
     local waiting=0
@@ -145,7 +144,7 @@ count_agent_status() {
                     "working") ((working++)); ((total_agents++)) ;;
                     "done") ((done++)); ((total_agents++)) ;;
                     "wait") ((waiting++)); ((total_agents++)) ;;
-                    "ask") ((done++)); ((ask++)); ((total_agents++)) ;;
+                    "ask") ((ask++)); ((total_agents++)) ;;
                 esac
             fi
         elif [ -f "$remote_status_file" ] && ! is_ssh_session "$session"; then
@@ -160,7 +159,7 @@ count_agent_status() {
                         "working") ((working++)); ((total_agents++)) ;;
                         "done") ((done++)); ((total_agents++)) ;;
                         "wait") ((waiting++)); ((total_agents++)) ;;
-                        "ask") ((done++)); ((ask++)); ((total_agents++)) ;;
+                        "ask") ((ask++)); ((total_agents++)) ;;
                     esac
                 fi
             fi
@@ -173,7 +172,7 @@ count_agent_status() {
                     "working") ((working++)); ((total_agents++)) ;;
                     "done") ((done++)); ((total_agents++)) ;;
                     "wait") ((waiting++)); ((total_agents++)) ;;
-                    "ask") ((done++)); ((ask++)); ((total_agents++)) ;;
+                    "ask") ((ask++)); ((total_agents++)) ;;
                 esac
             fi
         fi

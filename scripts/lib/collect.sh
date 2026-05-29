@@ -49,7 +49,7 @@ find_ancestor_pane() {
 # ─── State priority ───────────────────────────────────────────────
 _state_pri() {
     case "$1" in
-        working) echo 5 ;; wait)    echo 4 ;; ask)     echo 3 ;;
+        working) echo 5 ;; ask)     echo 4 ;; wait)    echo 3 ;;
         done)    echo 2 ;; parked)  echo 1 ;; *)       echo 0 ;;
     esac
 }
@@ -260,7 +260,9 @@ collect_data() {
         fi
         if [ -z "$pane_status" ]; then
             local _ss="${sess_state[$owner]:-}"
-            if [ -z "$_ss" ] || [ "$_ss" = "noagent" ]; then
+            # `ask` is per-pane (one specific agent is blocked on user input);
+            # never inherit it for hookless panes — they aren't the one asking.
+            if [ -z "$_ss" ] || [ "$_ss" = "noagent" ] || [ "$_ss" = "ask" ]; then
                 pane_status="done"
             else
                 pane_status="$_ss"
@@ -304,7 +306,7 @@ collect_data() {
                     working) ((SUMMARY_WORKING++)); ((SUMMARY_TOTAL++)); SUMMARY_HAS_WORKING=1 ;;
                     wait)    ((SUMMARY_WAITING++)); ((SUMMARY_TOTAL++)) ;;
                     done)    ((SUMMARY_DONE++));    ((SUMMARY_TOTAL++)) ;;
-                    ask)     ((SUMMARY_DONE++));    ((SUMMARY_ASK++)); ((SUMMARY_TOTAL++)) ;;
+                    ask)     ((SUMMARY_ASK++));     ((SUMMARY_TOTAL++)) ;;
                 esac
             done
         else
@@ -321,7 +323,7 @@ collect_data() {
     PANE_COUNTS=()
     for sname in "${!sess_agents[@]}"; do
         local agents="${sess_agents[$sname]}"
-        local pw=0 pd=0 pwt=0 count=0
+        local pw=0 pd=0 pwt=0 pa=0 count=0
         local seen=""
         for ap in $agents; do
             local pid="${ap%%:*}"
@@ -329,11 +331,11 @@ collect_data() {
             seen+="$pid "
             local rest="${ap#*:}"; local ps="${rest#*:}"
             case "$ps" in
-                working) ((pw++)) ;; done|ask) ((pd++)) ;; wait) ((pwt++)) ;;
+                working) ((pw++)) ;; done) ((pd++)) ;; wait) ((pwt++)) ;; ask) ((pa++)) ;;
             esac
             ((count++))
         done
-        (( count > 1 )) && PANE_COUNTS[$sname]="${pw}:${pd}:${pwt}"
+        (( count > 1 )) && PANE_COUNTS[$sname]="${pw}:${pd}:${pwt}:${pa}"
     done
 
     # ── 6. Collapse single-worktree parents ────────────────────
