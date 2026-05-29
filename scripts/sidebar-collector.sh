@@ -71,9 +71,17 @@ serialize_cache() {
 
 publish_status_summary() {
     local prev_done=""
+    local prev_ask=""
 
     if [ -f "$STATUS_LINE_COUNTS_FILE" ]; then
-        IFS=: read -r _ _ prev_done _ < "$STATUS_LINE_COUNTS_FILE"
+        local prev_counts fourth fifth
+        prev_counts=$(cat "$STATUS_LINE_COUNTS_FILE" 2>/dev/null || echo "")
+        IFS=: read -r _ _ prev_done fourth fifth <<< "$prev_counts"
+        if [ -n "$fifth" ]; then
+            prev_ask="$fourth"
+        else
+            prev_ask=0
+        fi
     fi
 
     write_status_summary_cache \
@@ -83,7 +91,9 @@ publish_status_summary() {
         "$SUMMARY_TOTAL" \
         "${SUMMARY_ASK:-0}"
 
-    if (( ! RUN_ONCE )) && [ -n "$prev_done" ] && [ "$SUMMARY_DONE" -gt "$prev_done" ]; then
+    if (( ! RUN_ONCE )) && [ -n "$prev_ask" ] && [ "${SUMMARY_ASK:-0}" -gt "$prev_ask" ]; then
+        "$SCRIPT_DIR/play-sound.sh" ask &
+    elif (( ! RUN_ONCE )) && [ -n "$prev_done" ] && [ "$SUMMARY_DONE" -gt "$prev_done" ]; then
         "$SCRIPT_DIR/play-sound.sh" &
     fi
 }

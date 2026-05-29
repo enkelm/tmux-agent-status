@@ -18,11 +18,12 @@ STATUS_DIR="$HOME/.cache/tmux-agent-status"
 PARKED_DIR="$STATUS_DIR/parked"
 WAIT_DIR="$STATUS_DIR/wait"
 PANE_DIR="$STATUS_DIR/panes"
+PENDING_TOOL_DIR="$STATUS_DIR/pending-tool"
 SIDEBAR_CLIENT_DIR="$STATUS_DIR/sidebar-clients"
 STATUS_LINE_CACHE_FILE="$STATUS_DIR/.status-line"
 STATUS_LINE_COUNTS_FILE="$STATUS_DIR/.status-line-counts"
 REFRESH_FILE="$STATUS_DIR/.sidebar-refresh"
-mkdir -p "$STATUS_DIR" "$PARKED_DIR" "$WAIT_DIR" "$PANE_DIR" "$SIDEBAR_CLIENT_DIR"
+mkdir -p "$STATUS_DIR" "$PARKED_DIR" "$WAIT_DIR" "$PANE_DIR" "$PENDING_TOOL_DIR" "$SIDEBAR_CLIENT_DIR"
 [ -f "$REFRESH_FILE" ] || : > "$REFRESH_FILE"
 
 # Source process-detection helpers from the same lib directory.
@@ -97,9 +98,9 @@ normalize_local_wait_status() {
 
 status_priority() {
     case "$1" in
+        ask) echo 6 ;;
         working) echo 5 ;;
         wait) echo 4 ;;
-        ask) echo 3 ;;
         done) echo 2 ;;
         parked) echo 1 ;;
         *) echo 0 ;;

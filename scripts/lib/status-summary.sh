@@ -58,7 +58,7 @@ write_status_summary_cache() {
     local summary
 
     summary="$(render_status_summary "$working" "$waiting" "$done" "$total_agents")"
-    printf '%s\n' "$working:$waiting:$done:$total_agents" > "${STATUS_LINE_COUNTS_FILE}.tmp"
+    printf '%s\n' "$working:$waiting:$done:$ask:$total_agents" > "${STATUS_LINE_COUNTS_FILE}.tmp"
     mv -f "${STATUS_LINE_COUNTS_FILE}.tmp" "$STATUS_LINE_COUNTS_FILE"
     printf '%s\n' "$summary" > "${STATUS_LINE_CACHE_FILE}.tmp"
     mv -f "${STATUS_LINE_CACHE_FILE}.tmp" "$STATUS_LINE_CACHE_FILE"

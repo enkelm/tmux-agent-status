@@ -187,18 +187,26 @@ IFS=':' read -r working waiting done ask total_agents <<< "$(count_agent_status)
 # Load previous status. Older versions stored only the working count; skip
 # notification diffing until we've written the new multi-count format once.
 prev_done=""
+prev_ask=""
 if [ -f "$LAST_STATUS_FILE" ]; then
     prev_status=$(cat "$LAST_STATUS_FILE" 2>/dev/null || echo "")
     if [[ "$prev_status" == *:* ]]; then
-        IFS=':' read -r _ _ prev_done _ <<< "$prev_status"
+        IFS=':' read -r _ _ prev_done fourth fifth <<< "$prev_status"
+        if [ -n "$fifth" ]; then
+            prev_ask="$fourth"
+        else
+            prev_ask=0
+        fi
     fi
 fi
 
 # Save current status counts
-echo "$working:$waiting:$done:$total_agents" > "$LAST_STATUS_FILE"
+echo "$working:$waiting:$done:$ask:$total_agents" > "$LAST_STATUS_FILE"
 
 # Check if any agent just finished (done count increased)
-if [ -n "$prev_done" ] && [ "$done" -gt "$prev_done" ]; then
+if [ -n "$prev_ask" ] && [ "$ask" -gt "$prev_ask" ]; then
+    "$SCRIPT_DIR/play-sound.sh" ask &
+elif [ -n "$prev_done" ] && [ "$done" -gt "$prev_done" ]; then
     "$SCRIPT_DIR/play-sound.sh" &
 fi
 

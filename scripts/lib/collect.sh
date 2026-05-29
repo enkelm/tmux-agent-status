@@ -49,7 +49,7 @@ find_ancestor_pane() {
 # ─── State priority ───────────────────────────────────────────────
 _state_pri() {
     case "$1" in
-        working) echo 5 ;; ask)     echo 4 ;; wait)    echo 3 ;;
+        ask)     echo 6 ;; working) echo 5 ;; wait)    echo 3 ;;
         done)    echo 2 ;; parked)  echo 1 ;; *)       echo 0 ;;
     esac
 }
@@ -79,11 +79,13 @@ collect_data() {
     (( ++_COLLECT_TICK >= 10 )) && { _COLLECT_TICK=0; _LAST_STATUS_MTIME=""; }
     local cur_mtime
     if [[ "$(uname)" == "Darwin" ]]; then
-        cur_mtime=$(stat -f %m "$STATUS_DIR" "$PARKED_DIR" "$WAIT_DIR" "$PANE_DIR" "$REFRESH_FILE" 2>/dev/null)
+        cur_mtime=$(stat -f %m "$STATUS_DIR" "$PARKED_DIR" "$WAIT_DIR" "$PANE_DIR" "$PENDING_TOOL_DIR" "$REFRESH_FILE" 2>/dev/null)
     else
-        cur_mtime=$(stat -c %Y "$STATUS_DIR" "$PARKED_DIR" "$WAIT_DIR" "$PANE_DIR" "$REFRESH_FILE" 2>/dev/null)
+        cur_mtime=$(stat -c %Y "$STATUS_DIR" "$PARKED_DIR" "$WAIT_DIR" "$PANE_DIR" "$PENDING_TOOL_DIR" "$REFRESH_FILE" 2>/dev/null)
     fi
-    if [[ "$cur_mtime" == "$_LAST_STATUS_MTIME" ]]; then
+    local has_pending_tool=0
+    compgen -G "$PENDING_TOOL_DIR/"'*.pending' >/dev/null 2>&1 && has_pending_tool=1
+    if [[ "$cur_mtime" == "$_LAST_STATUS_MTIME" && "$has_pending_tool" -eq 0 ]]; then
         _COLLECT_CHANGED=0
         return
     fi
@@ -266,6 +268,38 @@ collect_data() {
                 pane_status="done"
             else
                 pane_status="$_ss"
+            fi
+        fi
+        # Codex emits no hook event for approval dialogs, so promote
+        # "working" → "ask" when the hook left a pending-tool flag and either
+        # the pane shows an approval prompt or the pending tool has been blocked
+        # long enough that the prompt is likely outside tmux.
+        if [ "$agent_name" = "codex" ] && [ "$pane_status" = "working" ]; then
+            local _pending="$PENDING_TOOL_DIR/${owner}_${pid_id}.pending"
+            if [ -f "$_pending" ]; then
+                local _pane_tail
+                _pane_tail=$(tmux capture-pane -t "$pid_id" -p -S -8 2>/dev/null || true)
+                if [ -n "$_pane_tail" ] && \
+                   printf '%s' "$_pane_tail" | grep -qE 'Allow Codex to run `|Do you want to approve network access'; then
+                    pane_status="ask"
+                else
+                    local _fallback_after
+                    _fallback_after=$(tmux show-option -gqv @agent-codex-pending-ask-seconds 2>/dev/null || true)
+                    case "$_fallback_after" in
+                        ''|*[!0-9]*) _fallback_after=1 ;;
+                    esac
+                    if (( _fallback_after > 0 )); then
+                        local _pending_mtime
+                        if [[ "$(uname)" == "Darwin" ]]; then
+                            _pending_mtime=$(stat -f %m "$_pending" 2>/dev/null || echo "")
+                        else
+                            _pending_mtime=$(stat -c %Y "$_pending" 2>/dev/null || echo "")
+                        fi
+                        if [ -n "$_pending_mtime" ] && (( now - _pending_mtime >= _fallback_after )); then
+                            pane_status="ask"
+                        fi
+                    fi
+                fi
             fi
         fi
         sess_agents[$owner]+="${pid_id}:${agent_name}:${pane_status} "

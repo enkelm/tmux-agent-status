@@ -143,7 +143,17 @@ tmux set-hook -ga after-rename-window "run-shell -b '$CURRENT_DIR/scripts/sideba
 # Auto-create sidebar in new sessions (small delay so the session is ready)
 tmux set-hook -ga session-created "run-shell -b 'sleep 0.5 && $CURRENT_DIR/scripts/sidebar-toggle.sh'"
 
-# Start sidebar data collector daemon (one per tmux server)
+# Restart sidebar data collector daemon (one per tmux server). The collector
+# sources lib/collect.sh once, so replacing it on plugin reload is required for
+# status-detection changes to take effect without restarting tmux.
+collector_pid_file="$HOME/.cache/tmux-agent-status/.sidebar-collector.pid"
+if [ -f "$collector_pid_file" ]; then
+    collector_pid=$(cat "$collector_pid_file" 2>/dev/null)
+    if [ -n "$collector_pid" ] && kill -0 "$collector_pid" 2>/dev/null; then
+        kill "$collector_pid" 2>/dev/null || true
+    fi
+    rm -f "$collector_pid_file" 2>/dev/null || true
+fi
 "$CURRENT_DIR/scripts/sidebar-collector.sh" &
 
 # Also start it now if tmux is already running
