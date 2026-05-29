@@ -21,10 +21,7 @@ if [ -f "$MONITOR_PID_FILE" ]; then
     fi
 fi
 
-# Start monitoring in background
-(
-    echo $$ > "$MONITOR_PID_FILE"
-
+monitor_loop() {
     while tmux list-sessions >/dev/null 2>&1; do
         # Check if smart-monitor is running
         if [ -f "$DAEMON_PID_FILE" ]; then
@@ -54,4 +51,10 @@ fi
         fi
         rm -f "$DAEMON_PID_FILE"
     fi
-) &
+}
+
+# Start monitoring in background and persist the actual background PID. In bash,
+# $$ remains the parent shell PID inside a subshell, so using it here breaks the
+# singleton guard after config reloads.
+monitor_loop &
+echo $! > "$MONITOR_PID_FILE"
