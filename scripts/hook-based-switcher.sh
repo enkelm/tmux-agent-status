@@ -219,7 +219,8 @@ get_switcher_rows() {
         pane_cmd[$pane_id]="$cmd"
         local _cwd_base="${pane_cwd##*/}"
         pane_cwd_base[$pane_id]="$_cwd_base"
-        pane_title_clean[$pane_id]="$(sanitize_pane_title "$pane_title" "$_cwd_base" "$cmd")"
+        pane_title_clean[$pane_id]="$(cached_pane_title "$session" "$pane_id")"
+        [ -n "${pane_title_clean[$pane_id]:-}" ] || pane_title_clean[$pane_id]="$(sanitize_pane_title "$pane_title" "$_cwd_base" "$cmd")"
     done < <(tmux list-panes -a -F \
         "#{session_name}${tab}#{pane_id}${tab}#{window_index}${tab}#{window_name}${tab}#{pane_current_command}${tab}#{pane_title}${tab}#{pane_current_path}" 2>/dev/null)
 

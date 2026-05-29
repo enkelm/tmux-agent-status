@@ -10,9 +10,10 @@ WAIT_DIR="$STATUS_DIR/wait"
 PARKED_DIR="$STATUS_DIR/parked"
 PANE_DIR="$STATUS_DIR/panes"
 PENDING_TOOL_DIR="$STATUS_DIR/pending-tool"
+PANE_TITLE_DIR="$STATUS_DIR/pane-titles"
 REFRESH_FILE="$STATUS_DIR/.sidebar-refresh"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-mkdir -p "$STATUS_DIR" "$WAIT_DIR" "$PARKED_DIR" "$PANE_DIR" "$PENDING_TOOL_DIR"
+mkdir -p "$STATUS_DIR" "$WAIT_DIR" "$PARKED_DIR" "$PANE_DIR" "$PENDING_TOOL_DIR" "$PANE_TITLE_DIR"
 [ -f "$REFRESH_FILE" ] || : > "$REFRESH_FILE"
 
 # Read the JSON payload from stdin. Codex sends it on PreToolUse/PostToolUse and
@@ -228,6 +229,85 @@ play_ask_sound() {
     "$SCRIPT_DIR/../scripts/play-sound.sh" ask 2>/dev/null &
 }
 
+extract_prompt_title() {
+    [ -n "$HOOK_PAYLOAD" ] || return 1
+
+    if command -v jq >/dev/null 2>&1; then
+        printf '%s' "$HOOK_PAYLOAD" | jq -r '
+            [
+                .prompt?,
+                .user_prompt?,
+                .message?,
+                .input?,
+                .text?,
+                .hook_input?.prompt?,
+                .event?.prompt?
+            ]
+            | map(select(type == "string" and length > 0))
+            | .[0] // empty
+        ' 2>/dev/null
+        return
+    fi
+
+    printf '%s' "$HOOK_PAYLOAD" | sed -n 's/.*"prompt"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
+}
+
+normalize_pane_title() {
+    tr '\r\n\t' '   ' | \
+        tr -d '\007\033' | \
+        sed 's/|//g; s/[[:space:]][[:space:]]*/ /g; s/^ //; s/ $//'
+}
+
+truncate_pane_title() {
+    local title="$1"
+    local max_len=60
+
+    if [ "${#title}" -le "$max_len" ]; then
+        printf '%s\n' "$title"
+        return
+    fi
+
+    printf '%s\n' "${title:0:max_len}"
+}
+
+is_meaningful_prompt_title() {
+    local title="$1"
+    local lower
+    lower=$(printf '%s' "$title" | tr '[:upper:]' '[:lower:]')
+
+    case "$lower" in
+        ping|pong|test|tests|ok|okay|yes|no|y|n|hi|hello|hey|thanks|thank\ you|continue|go\ on|proceed)
+            return 1
+            ;;
+    esac
+
+    [ "${#title}" -ge 12 ]
+}
+
+set_pane_title_from_prompt() {
+    [ -n "${TMUX_PANE:-}" ] || return 0
+
+    local title_file="$PANE_TITLE_DIR/${TMUX_SESSION}_${TMUX_PANE}.title"
+    if [ -s "$title_file" ]; then
+        return 0
+    fi
+
+    local title=""
+    title=$(extract_prompt_title | normalize_pane_title)
+    [ -n "$title" ] || return 0
+    is_meaningful_prompt_title "$title" || return 0
+    title=$(truncate_pane_title "$title")
+    [ -n "$title" ] || return 0
+
+    printf '%s\n' "$title" > "$title_file" 2>/dev/null || true
+
+    local pane_tty=""
+    pane_tty=$(tmux display-message -p -t "$TMUX_PANE" '#{pane_tty}' 2>/dev/null || true)
+    [ -n "$pane_tty" ] || return 0
+
+    printf '\033]2;%s\007' "$title" > "$pane_tty" 2>/dev/null || true
+}
+
 TMUX_SESSION=$(get_tmux_session) || exit 0
 HOOK_TYPE="${1:-}"
 WAIT_FILE="$WAIT_DIR/${TMUX_SESSION}.wait"
@@ -244,6 +324,7 @@ case "$HOOK_TYPE" in
     UserPromptSubmit)
         clear_interaction_overrides "$TMUX_SESSION"
         clear_pending_tool "$TMUX_SESSION"
+        set_pane_title_from_prompt
         set_status "$TMUX_SESSION" "working"
         mark_refresh
         ;;

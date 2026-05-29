@@ -63,3 +63,12 @@ truncate_title() {
         printf '%s' "$title"
     fi
 }
+
+cached_pane_title() {
+    local session="$1"
+    local pane_id="$2"
+    local title_file="${PANE_TITLE_DIR:-$HOME/.cache/tmux-agent-status/pane-titles}/${session}_${pane_id}.title"
+
+    [ -f "$title_file" ] || return 0
+    sed -n '1p' "$title_file" 2>/dev/null | sed 's/|//g; s/[[:space:]][[:space:]]*/ /g; s/^ //; s/ $//'
+}

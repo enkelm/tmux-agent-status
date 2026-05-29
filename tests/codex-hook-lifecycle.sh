@@ -15,8 +15,10 @@ PANE_DIR="$STATUS_DIR/panes"
 PENDING_TOOL_DIR="$STATUS_DIR/pending-tool"
 REFRESH_FILE="$STATUS_DIR/.sidebar-refresh"
 SOUND_LOG="$TMP_DIR/sound.log"
+PANE_TTY="$TMP_DIR/pane.tty"
 
 mkdir -p "$FAKE_BIN" "$STATUS_DIR" "$WAIT_DIR" "$PARKED_DIR" "$PANE_DIR" "$PENDING_TOOL_DIR"
+: > "$PANE_TTY"
 
 cat > "$FAKE_BIN/tmux" <<'EOF'
 #!/usr/bin/env bash
@@ -26,6 +28,10 @@ case "${1:-}" in
     display-message)
         if [ "${2:-}" = "-p" ] && [ "${3:-}" = "#{session_name}" ]; then
             echo "codex-hooks"
+            exit 0
+        fi
+        if [ "${2:-}" = "-p" ] && [ "${3:-}" = "-t" ] && [ "${5:-}" = "#{pane_tty}" ]; then
+            echo "${PANE_TTY:?}"
             exit 0
         fi
         ;;
@@ -90,6 +96,7 @@ run_hook() {
     printf '%s\n' "$payload" | \
         PATH="$FAKE_BIN:$PATH" \
         HOME="$TEST_HOME" \
+        PANE_TTY="$PANE_TTY" \
         SOUND_LOG="$SOUND_LOG" \
         TMUX="/tmp/tmux-test,4242,0" \
         TMUX_PANE="%9" \
@@ -117,11 +124,20 @@ echo "1" > "$WAIT_DIR/codex-hooks_%10.wait"
 : > "$PARKED_DIR/codex-hooks.parked"
 : > "$PARKED_DIR/codex-hooks_%9.parked"
 : > "$PARKED_DIR/codex-hooks_%10.parked"
-run_hook "UserPromptSubmit"
+run_hook "UserPromptSubmit" '{"hook_event_name":"UserPromptSubmit","prompt":"ping"}'
+if [ -f "$STATUS_DIR/pane-titles/codex-hooks_%9.title" ]; then
+    echo "Assertion failed: trivial prompts should not seed the cached pane title" >&2
+    exit 1
+fi
+run_hook "UserPromptSubmit" '{"hook_event_name":"UserPromptSubmit","prompt":"fix off-by-one in foo.go\nverify regression | please"}'
 session_status="$(cat "$STATUS_DIR/codex-hooks.status")"
 pane_status="$(cat "$PANE_DIR/codex-hooks_%9.status")"
 assert_eq "working" "$session_status" "UserPromptSubmit should mark the session working"
 assert_eq "working" "$pane_status" "UserPromptSubmit should mark the pane working"
+assert_eq $'\033]2;fix off-by-one in foo.go verify regression please\007' "$(cat "$PANE_TTY")" "UserPromptSubmit should write a sanitized prompt title to the pane TTY"
+assert_eq "fix off-by-one in foo.go verify regression please" "$(cat "$STATUS_DIR/pane-titles/codex-hooks_%9.title")" "UserPromptSubmit should persist a cached prompt title"
+run_hook "UserPromptSubmit" '{"hook_event_name":"UserPromptSubmit","prompt":"replace this title with a later prompt"}'
+assert_eq "fix off-by-one in foo.go verify regression please" "$(cat "$STATUS_DIR/pane-titles/codex-hooks_%9.title")" "Later prompts should not replace the first meaningful cached pane title"
 [ -f "$REFRESH_FILE" ] || { echo "Assertion failed: UserPromptSubmit should leave a sidebar refresh marker" >&2; exit 1; }
 if [ -f "$WAIT_DIR/codex-hooks.wait" ]; then
     echo "Assertion failed: UserPromptSubmit should clear wait mode" >&2

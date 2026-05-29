@@ -19,11 +19,12 @@ PARKED_DIR="$STATUS_DIR/parked"
 WAIT_DIR="$STATUS_DIR/wait"
 PANE_DIR="$STATUS_DIR/panes"
 PENDING_TOOL_DIR="$STATUS_DIR/pending-tool"
+PANE_TITLE_DIR="$STATUS_DIR/pane-titles"
 SIDEBAR_CLIENT_DIR="$STATUS_DIR/sidebar-clients"
 STATUS_LINE_CACHE_FILE="$STATUS_DIR/.status-line"
 STATUS_LINE_COUNTS_FILE="$STATUS_DIR/.status-line-counts"
 REFRESH_FILE="$STATUS_DIR/.sidebar-refresh"
-mkdir -p "$STATUS_DIR" "$PARKED_DIR" "$WAIT_DIR" "$PANE_DIR" "$PENDING_TOOL_DIR" "$SIDEBAR_CLIENT_DIR"
+mkdir -p "$STATUS_DIR" "$PARKED_DIR" "$WAIT_DIR" "$PANE_DIR" "$PENDING_TOOL_DIR" "$PANE_TITLE_DIR" "$SIDEBAR_CLIENT_DIR"
 [ -f "$REFRESH_FILE" ] || : > "$REFRESH_FILE"
 
 # Source process-detection helpers from the same lib directory.

@@ -82,9 +82,9 @@ collect_data() {
     (( ++_COLLECT_TICK >= 10 )) && { _COLLECT_TICK=0; _LAST_STATUS_MTIME=""; }
     local cur_mtime
     if [[ "$(uname)" == "Darwin" ]]; then
-        cur_mtime=$(stat -f %m "$STATUS_DIR" "$PARKED_DIR" "$WAIT_DIR" "$PANE_DIR" "$PENDING_TOOL_DIR" "$REFRESH_FILE" 2>/dev/null)
+        cur_mtime=$(stat -f %m "$STATUS_DIR" "$PARKED_DIR" "$WAIT_DIR" "$PANE_DIR" "$PENDING_TOOL_DIR" "$PANE_TITLE_DIR" "$REFRESH_FILE" 2>/dev/null)
     else
-        cur_mtime=$(stat -c %Y "$STATUS_DIR" "$PARKED_DIR" "$WAIT_DIR" "$PANE_DIR" "$PENDING_TOOL_DIR" "$REFRESH_FILE" 2>/dev/null)
+        cur_mtime=$(stat -c %Y "$STATUS_DIR" "$PARKED_DIR" "$WAIT_DIR" "$PANE_DIR" "$PENDING_TOOL_DIR" "$PANE_TITLE_DIR" "$REFRESH_FILE" 2>/dev/null)
     fi
     local has_pending_tool=0
     compgen -G "$PENDING_TOOL_DIR/"'*.pending' >/dev/null 2>&1 && has_pending_tool=1
@@ -127,7 +127,8 @@ collect_data() {
         pane_to_id[$ppid]="$pane_id"
         pane_to_window[$pane_id]="$win_idx"
         window_names["${sname}:${win_idx}"]="$win_name"
-        pane_titles[$pane_id]="$(sanitize_pane_title "$ptitle" "${pcwd##*/}" "$pcmd")"
+        pane_titles[$pane_id]="$(cached_pane_title "$sname" "$pane_id")"
+        [ -n "${pane_titles[$pane_id]:-}" ] || pane_titles[$pane_id]="$(sanitize_pane_title "$ptitle" "${pcwd##*/}" "$pcmd")"
         all_pane_pids+="$ppid "
 
         [[ -n "${sess_seen[$sname]:-}" ]] && continue
