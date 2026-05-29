@@ -241,7 +241,17 @@ collect_data() {
     fi
 
     # Build sess_agents from KNOWN_AGENTS + per-pane status files.
-    declare -A sess_agents
+    declare -A sess_agents sess_has_pane_status
+    local _status_file=""
+    for _status_file in "$pane_dir/"*.status; do
+        [ -f "$_status_file" ] || continue
+        local _bname _pid_id _owner
+        _bname=$(basename "$_status_file" .status)
+        _pid_id="${_bname##*_}"
+        _owner="${_bname%_${_pid_id}}"
+        [ -n "${LIVE_PANES[$_pid_id]:-}" ] || continue
+        sess_has_pane_status[$_owner]=1
+    done
     for key in "${!KNOWN_AGENTS[@]}"; do
         local owner="${key%%:*}"
         local pid_id="${key#*:}"
@@ -264,7 +274,8 @@ collect_data() {
             local _ss="${sess_state[$owner]:-}"
             # `ask` is per-pane (one specific agent is blocked on user input);
             # never inherit it for hookless panes — they aren't the one asking.
-            if [ -z "$_ss" ] || [ "$_ss" = "noagent" ] || [ "$_ss" = "ask" ]; then
+            if [ -z "$_ss" ] || [ "$_ss" = "noagent" ] || [ "$_ss" = "ask" ] || \
+               { [ "$_ss" = "working" ] && [ -n "${sess_has_pane_status[$owner]:-}" ]; }; then
                 pane_status="done"
             else
                 pane_status="$_ss"

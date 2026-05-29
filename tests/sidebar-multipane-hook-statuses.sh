@@ -113,6 +113,17 @@ assert_contains $'R:S|codex-multipane|ask||\tcodex-multipane\tS' "$CACHE_FILE" "
 assert_contains $'R:P|codex-multipane|%0|codex|ask|' "$CACHE_FILE" "pending Codex pane with an approval prompt should appear as asking"
 assert_contains $'R:P|codex-multipane|%4|codex|done|' "$CACHE_FILE" "done pane should appear as a child sidebar row"
 
+rm -f "$PANE_DIR/codex-multipane_%4.status"
+echo "working" > "$STATUS_DIR/codex-multipane.status"
+
+PATH="$FAKE_BIN:$PATH" \
+HOME="$TEST_HOME" \
+"$REPO_DIR/scripts/sidebar-collector.sh" --once >/dev/null
+
+assert_contains $'PC:codex-multipane:0:1:0:1' "$CACHE_FILE" "hookless panes should not inherit Codex pending working state"
+assert_contains $'R:P|codex-multipane|%0|codex|ask|' "$CACHE_FILE" "pending Codex pane should keep its own asking state"
+assert_contains $'R:P|codex-multipane|%4|codex|done|' "$CACHE_FILE" "hookless sibling pane should remain done while Codex is pending"
+
 echo "working" > "$PANE_DIR/codex-multipane_%4.status"
 : > "$PENDING_TOOL_DIR/codex-multipane_%4.pending"
 
