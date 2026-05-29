@@ -12,6 +12,8 @@ WAIT_DIR="$STATUS_DIR/wait"
 source "$SCRIPT_DIR/lib/session-status.sh"
 # shellcheck source=lib/selection-targets.sh
 source "$SCRIPT_DIR/lib/selection-targets.sh"
+# shellcheck source=lib/pane-title.sh
+source "$SCRIPT_DIR/lib/pane-title.sh"
 
 status_icon() {
     case "$1" in
@@ -191,10 +193,12 @@ get_switcher_rows() {
     declare -A window_name=()
     declare -A window_panes=()
     declare -A pane_cmd=()
+    declare -A pane_title_clean=()
+    declare -A pane_cwd_base=()
     local session_order=()
-    local session="" pane_id="" win_idx="" win_name="" cmd="" pane_title=""
+    local session="" pane_id="" win_idx="" win_name="" cmd="" pane_title="" pane_cwd=""
 
-    while IFS=$'\t' read -r session pane_id win_idx win_name cmd pane_title; do
+    while IFS=$'\t' read -r session pane_id win_idx win_name cmd pane_title pane_cwd; do
         [ -z "$session" ] && continue
 
         if [ -z "${session_seen[$session]:-}" ]; then
@@ -213,8 +217,17 @@ get_switcher_rows() {
 
         window_panes[$window_key]+="${pane_id} "
         pane_cmd[$pane_id]="$cmd"
+        local _cwd_base="${pane_cwd##*/}"
+        pane_cwd_base[$pane_id]="$_cwd_base"
+        pane_title_clean[$pane_id]="$(sanitize_pane_title "$pane_title" "$_cwd_base" "$cmd")"
     done < <(tmux list-panes -a -F \
-        "#{session_name}${tab}#{pane_id}${tab}#{window_index}${tab}#{window_name}${tab}#{pane_current_command}${tab}#{pane_title}" 2>/dev/null)
+        "#{session_name}${tab}#{pane_id}${tab}#{window_index}${tab}#{window_name}${tab}#{pane_current_command}${tab}#{pane_title}${tab}#{pane_current_path}" 2>/dev/null)
+
+    # Reserve fixed columns for: icon + indent + "• [pane] " + session/window/command
+    # text, then give the rest of the client width to the title.
+    local client_w
+    client_w=$(tmux display -p '#{client_width}' 2>/dev/null)
+    [[ "$client_w" =~ ^[0-9]+$ ]] || client_w=120
 
     for session in "${session_order[@]}"; do
         local win_list="${session_windows[$session]:-}"
@@ -279,9 +292,24 @@ get_switcher_rows() {
                 pane_status=$(get_pane_status "$session" "$pane")
                 pane_icon=$(status_icon "$pane_status")
                 badge=$(pane_agent_badge "$session" "$pane")
-                printf 'P\t%s:%s\t%b      • [pane] %s / %s : %s%b\n' \
+                local title="${pane_title_clean[$pane]:-}"
+                local title_suffix=""
+                if [[ -n "$title" ]]; then
+                    # Estimate visible width of fixed prefix + badge.
+                    # Prefix: "      • [pane] {session} / {window} : {cmd}"
+                    local cur_cmd="${pane_cmd[$pane]:-shell}"
+                    local prefix_vlen=$(( 6 + 2 + 7 + ${#session} + 3 + ${#window_name[$window_key]} + 3 + ${#cur_cmd} ))
+                    local agent_name=""
+                    [ -f "$PANE_DIR/${session}_${pane}.agent" ] && agent_name=$(< "$PANE_DIR/${session}_${pane}.agent")
+                    local badge_vlen=0
+                    [ -n "$agent_name" ] && badge_vlen=$(( 4 + ${#agent_name} ))
+                    local title_max=$(( client_w - prefix_vlen - badge_vlen - 3 ))
+                    (( title_max < 12 )) && title_max=12
+                    title_suffix=" — $(truncate_title "$title" "$title_max")"
+                fi
+                printf 'P\t%s:%s\t%b      • [pane] %s / %s : %s%b\033[2m%s\033[0m\n' \
                     "$session" "$pane" "$pane_icon" "$session" "${window_name[$window_key]}" \
-                    "${pane_cmd[$pane]:-shell}" "$badge"
+                    "${pane_cmd[$pane]:-shell}" "$badge" "$title_suffix"
             done
         done
     done

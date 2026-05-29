@@ -13,6 +13,8 @@ source "$CURRENT_DIR/lib/session-status.sh"
 source "$CURRENT_DIR/lib/sidebar-clients.sh"
 # shellcheck source=lib/selection-targets.sh
 source "$CURRENT_DIR/lib/selection-targets.sh"
+# shellcheck source=lib/pane-title.sh
+source "$CURRENT_DIR/lib/pane-title.sh"
 
 # ─── Mode ─────────────────────────────────────────────────────────
 PREVIEW_MODE=0
@@ -702,7 +704,8 @@ render() {
             local pane_id="${rest%%|*}"; rest="${rest#*|}"
             local agent="${rest%%|*}"; rest="${rest#*|}"
             local pstatus="${rest%%|*}"; rest="${rest#*|}"
-            local is_last="$rest"
+            local is_last="${rest%%|*}"; rest="${rest#*|}"
+            local ptitle="$rest"
             local sel_name="${SEL_NAMES[$sidx]:-}"
             local sel_type="${SEL_TYPES[$sidx]:-}"
             if [[ "$sel_type" == "P" && "$sel_name" == *:w* ]]; then
@@ -717,7 +720,14 @@ render() {
             local active_tag=""
             local tag_vlen=0
             (( is_cur )) && { active_tag=" ${DIM}ACTIVE${RST}"; tag_vlen=7; }
-            local vlen=$(( ${#agent} + tag_vlen ))
+            local display_agent="$agent"
+            if [[ -n "$ptitle" ]]; then
+                local _t_avail=$(( LW - 8 - ${#agent} - tag_vlen - 3 ))
+                if (( _t_avail >= 6 )); then
+                    display_agent="${agent} — $(truncate_title "$ptitle" "$_t_avail")"
+                fi
+            fi
+            local vlen=$(( ${#display_agent} + tag_vlen ))
             local pad
             local _spinner_bg="none"
             (( is_sel )) && _spinner_bg="sel"
@@ -727,19 +737,19 @@ render() {
                 pad=$((LW - vlen - 8))
                 (( pad < 0 )) && pad=0
                 [[ "$pstatus" == "working" ]] && _queue_spinner_target "$((line + 1))" "$((6 + vlen + pad + 1))" "$_spinner_bg"
-                buf+="${SEL_BG}  ${BOLD}▸${RST}${SEL_BG} ${DIM}${tree}${RST}${SEL_BG} ${DIM}${agent}${RST}${active_tag}${SEL_BG}"
+                buf+="${SEL_BG}  ${BOLD}▸${RST}${SEL_BG} ${DIM}${tree}${RST}${SEL_BG} ${DIM}${display_agent}${RST}${active_tag}${SEL_BG}"
                 buf+="$(printf '%*s' "$pad" '')${_ic}${_icon}${RST}\033[K\n"
             elif (( is_cur )); then
                 pad=$((LW - vlen - 8))
                 (( pad < 0 )) && pad=0
                 [[ "$pstatus" == "working" ]] && _queue_spinner_target "$((line + 1))" "$((6 + vlen + pad + 1))" "$_spinner_bg"
-                buf+="${CUR_BG}  ${ACC_GRN}▌${RST}${CUR_BG} ${DIM}${tree}${RST}${CUR_BG} ${DIM}${agent}${RST}${active_tag}${CUR_BG}"
+                buf+="${CUR_BG}  ${ACC_GRN}▌${RST}${CUR_BG} ${DIM}${tree}${RST}${CUR_BG} ${DIM}${display_agent}${RST}${active_tag}${CUR_BG}"
                 buf+="$(printf '%*s' "$pad" '')${_ic}${_icon}${RST}\033[K\n"
             else
-                pad=$((LW - ${#agent} - 8))
+                pad=$((LW - ${#display_agent} - 8))
                 (( pad < 0 )) && pad=0
-                [[ "$pstatus" == "working" ]] && _queue_spinner_target "$((line + 1))" "$((6 + ${#agent} + pad + 1))" "$_spinner_bg"
-                buf+="    ${DIM}${tree} ${agent}${RST}"
+                [[ "$pstatus" == "working" ]] && _queue_spinner_target "$((line + 1))" "$((6 + ${#display_agent} + pad + 1))" "$_spinner_bg"
+                buf+="    ${DIM}${tree} ${display_agent}${RST}"
                 buf+="$(printf '%*s' "$pad" '')${_ic}${_icon}${RST}\033[K\n"
             fi
 
@@ -750,7 +760,8 @@ render() {
             local agent="${rest%%|*}"; rest="${rest#*|}"
             local pstatus="${rest%%|*}"; rest="${rest#*|}"
             local is_last="${rest%%|*}"; rest="${rest#*|}"
-            local parent_is_last="$rest"
+            local parent_is_last="${rest%%|*}"; rest="${rest#*|}"
+            local ptitle="$rest"
             [[ "$sess" == "$cur_session" && "$pane_id" == "$cur_pane" ]] && is_cur=1
 
             local _icon _ic; _set_icon_color "$pstatus"
@@ -759,7 +770,14 @@ render() {
             local active_tag=""
             local tag_vlen=0
             (( is_cur )) && { active_tag=" ${DIM}ACTIVE${RST}"; tag_vlen=7; }
-            local vlen=$(( ${#agent} + tag_vlen ))
+            local display_agent="$agent"
+            if [[ -n "$ptitle" ]]; then
+                local _t_avail=$(( LW - 10 - ${#agent} - tag_vlen - 3 ))
+                if (( _t_avail >= 6 )); then
+                    display_agent="${agent} — $(truncate_title "$ptitle" "$_t_avail")"
+                fi
+            fi
+            local vlen=$(( ${#display_agent} + tag_vlen ))
             local pad
             local _spinner_bg="none"
             (( is_sel )) && _spinner_bg="sel"
@@ -769,19 +787,19 @@ render() {
                 pad=$((LW - vlen - 10))
                 (( pad < 0 )) && pad=0
                 [[ "$pstatus" == "working" ]] && _queue_spinner_target "$((line + 1))" "$((8 + vlen + pad + 1))" "$_spinner_bg"
-                buf+="${SEL_BG}  ${BOLD}▸${RST}${SEL_BG} ${DIM}${vert} ${tree}${RST}${SEL_BG} ${DIM}${agent}${RST}${active_tag}${SEL_BG}"
+                buf+="${SEL_BG}  ${BOLD}▸${RST}${SEL_BG} ${DIM}${vert} ${tree}${RST}${SEL_BG} ${DIM}${display_agent}${RST}${active_tag}${SEL_BG}"
                 buf+="$(printf '%*s' "$pad" '')${_ic}${_icon}${RST}\033[K\n"
             elif (( is_cur )); then
                 pad=$((LW - vlen - 10))
                 (( pad < 0 )) && pad=0
                 [[ "$pstatus" == "working" ]] && _queue_spinner_target "$((line + 1))" "$((8 + vlen + pad + 1))" "$_spinner_bg"
-                buf+="${CUR_BG}  ${ACC_GRN}▌${RST}${CUR_BG} ${DIM}${vert} ${tree}${RST}${CUR_BG} ${DIM}${agent}${RST}${active_tag}${CUR_BG}"
+                buf+="${CUR_BG}  ${ACC_GRN}▌${RST}${CUR_BG} ${DIM}${vert} ${tree}${RST}${CUR_BG} ${DIM}${display_agent}${RST}${active_tag}${CUR_BG}"
                 buf+="$(printf '%*s' "$pad" '')${_ic}${_icon}${RST}\033[K\n"
             else
-                pad=$((LW - ${#agent} - 10))
+                pad=$((LW - ${#display_agent} - 10))
                 (( pad < 0 )) && pad=0
-                [[ "$pstatus" == "working" ]] && _queue_spinner_target "$((line + 1))" "$((8 + ${#agent} + pad + 1))" "$_spinner_bg"
-                buf+="    ${DIM}${vert} ${tree} ${agent}${RST}"
+                [[ "$pstatus" == "working" ]] && _queue_spinner_target "$((line + 1))" "$((8 + ${#display_agent} + pad + 1))" "$_spinner_bg"
+                buf+="    ${DIM}${vert} ${tree} ${display_agent}${RST}"
                 buf+="$(printf '%*s' "$pad" '')${_ic}${_icon}${RST}\033[K\n"
             fi
         fi

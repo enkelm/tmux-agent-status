@@ -18,6 +18,9 @@
 [[ -n "${_COLLECT_LIB_LOADED:-}" ]] && return 0
 _COLLECT_LIB_LOADED=1
 
+# shellcheck source=pane-title.sh
+source "$(dirname "${BASH_SOURCE[0]}")/pane-title.sh"
+
 # ─── PID ancestry helpers ─────────────────────────────────────────
 
 _build_pid_map() {
@@ -111,11 +114,12 @@ collect_data() {
     declare -A pane_to_session   # pane_pid → session
     declare -A pane_to_id        # pane_pid → pane_id (e.g. %5)
     declare -A pane_to_window    # pane_id → window_index
+    declare -A pane_titles       # pane_id → sanitized pane_title
     declare -A window_names      # session:window_index → window_name
     local all_pane_pids=""
 
     local _tab=$'\t'
-    while IFS=$'\t' read -r sname pane_id pcwd ppid win_idx win_name; do
+    while IFS=$'\t' read -r sname pane_id pcwd ppid win_idx win_name pcmd ptitle; do
         [ -z "$sname" ] && continue
 
         [[ -z "${sess_cwd[$sname]:-}" ]] && sess_cwd[$sname]="$pcwd"
@@ -123,6 +127,7 @@ collect_data() {
         pane_to_id[$ppid]="$pane_id"
         pane_to_window[$pane_id]="$win_idx"
         window_names["${sname}:${win_idx}"]="$win_name"
+        pane_titles[$pane_id]="$(sanitize_pane_title "$ptitle" "${pcwd##*/}" "$pcmd")"
         all_pane_pids+="$ppid "
 
         [[ -n "${sess_seen[$sname]:-}" ]] && continue
@@ -164,7 +169,7 @@ collect_data() {
         sess_state[$sname]="$state"
         sess_extra[$sname]="$extra"
         sess_ssh[$sname]="$is_ssh"
-    done < <(tmux list-panes -a -F "#{session_name}${_tab}#{pane_id}${_tab}#{pane_current_path}${_tab}#{pane_pid}${_tab}#{window_index}${_tab}#{window_name}" 2>/dev/null)
+    done < <(tmux list-panes -a -F "#{session_name}${_tab}#{pane_id}${_tab}#{pane_current_path}${_tab}#{pane_pid}${_tab}#{window_index}${_tab}#{window_name}${_tab}#{pane_current_command}${_tab}#{pane_title}" 2>/dev/null)
 
     # ── 3. Worktree detection ────────────────────────────────────
     declare -A worktree_parent worktree_children
@@ -465,7 +470,8 @@ collect_data() {
                 ((ai++))
                 local pid="${ap%%:*}" r="${ap#*:}"
                 local agent="${r%%:*}" st="${r#*:}"
-                ENTRIES+=("P|${sname}|${pid}|${agent}|${st}|$((ai==total))")
+                local ptitle="${pane_titles[$pid]:-}"
+                ENTRIES+=("P|${sname}|${pid}|${agent}|${st}|$((ai==total))|${ptitle}")
                 SEL_NAMES+=("${sname}:${pid}")
                 SEL_TYPES+=("P")
             done
@@ -482,7 +488,8 @@ collect_data() {
                     local ap="${win_agents[$widx]%% *}"
                     local pid="${ap%%:*}" r="${ap#*:}"
                     local st="${r#*:}"
-                    ENTRIES+=("P|${sname}|${pid}|${wname}|${st}|${w_last}")
+                    local ptitle="${pane_titles[$pid]:-}"
+                    ENTRIES+=("P|${sname}|${pid}|${wname}|${st}|${w_last}|${ptitle}")
                     SEL_NAMES+=("${sname}:w${widx}")
                     SEL_TYPES+=("P")
                 else
@@ -492,7 +499,7 @@ collect_data() {
                         local wp; wp=$(_state_pri "$ws" 2>/dev/null || echo 0)
                         (( wp > best_pri )) && { best_pri=$wp; best_st="$ws"; }
                     done
-                    ENTRIES+=("P|${sname}|w${widx}|${wname}|${best_st}|${w_last}")
+                    ENTRIES+=("P|${sname}|w${widx}|${wname}|${best_st}|${w_last}|")
                     SEL_NAMES+=("${sname}:w${widx}")
                     SEL_TYPES+=("P")
                     local ai=0
@@ -500,7 +507,8 @@ collect_data() {
                         ((ai++))
                         local pid="${wap%%:*}" r="${wap#*:}"
                         local agent="${r%%:*}" st="${r#*:}"
-                        ENTRIES+=("Q|${sname}|${pid}|${agent}|${st}|$((ai==pc))|${w_last}")
+                        local ptitle="${pane_titles[$pid]:-}"
+                        ENTRIES+=("Q|${sname}|${pid}|${agent}|${st}|$((ai==pc))|${w_last}|${ptitle}")
                         SEL_NAMES+=("${sname}:${pid}")
                         SEL_TYPES+=("P")
                     done
